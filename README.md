@@ -1,1 +1,1 @@
-# block-power-iter-svd
+# SVD using block power iterations

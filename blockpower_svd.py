@@ -5,14 +5,24 @@ from math import sqrt, log, ceil, floor
 from sklearn.utils.extmath import svd_flip
 
 
+import logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+# INFO or WARNING
+logger.setLevel(logging.INFO)
+
 def _to_fixed(f, precision=20):
-    f = f * (1 << precision)
-    return f.astype(np.int64)
+    # f = f * (1 << precision)
+    # return f.astype(np.int64)
+    d = int(ceil(np.log(np.exp(precision * np.log(2))) / np.log(10)))
+    return np.round(f, d)
 
 
 def _from_fixed(x, precision=20):
-    x = x / float((1 << precision))
-    return x.astype(np.double)
+    # x = x / float((1 << precision))
+    # return x.astype(np.double)
+    d = int(ceil(np.log(np.exp(precision * np.log(2))) / np.log(10)))
+    return np.round(x, d)
 
 
 def check_overflow(As, nbits=0):
@@ -39,8 +49,9 @@ def check_overflow(As, nbits=0):
     nbits_max = floor((63-ceil(bits_s))/2)
     #print('bits_s={} max nbits={}'.format(bits_s, nbits_max))
     if bits_a + bits_s > bits_max:
-        raise OverflowError('bits(max_norm_sq)={} bits(base)={}'.format(bits_s,
-                                                             nbits))
+        logger.warning('Overflow potential: bits(max_norm_sq)={} bits(base)={'
+                       '}'.format(bits_s, nbits))
+        nbits_max = 15
     return int(nbits_max)
 
 def private_distributed_block_power_iteration(As, k, T, nbits=18,
@@ -58,7 +69,7 @@ def private_distributed_block_power_iteration(As, k, T, nbits=18,
 
     for t in range(T):
         V0 = V
-        V = np.zeros_like(V, dtype=np.int64)
+        V = np.zeros_like(V, dtype=np.double)
         for A in As:
             V += _to_fixed(np.dot(A, V0), nbits)
 

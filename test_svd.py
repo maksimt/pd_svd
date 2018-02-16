@@ -104,7 +104,7 @@ def test_convergence_to_np_linalg_int_precision(n, d, k, M, nbits, seed):
         V_est, s_est = sym_eigen_to_mat_singular(V_est, s_est, sym_method)
         deltas = frob_err_by_vector(V, V_est)
         print(np.max(deltas))
-        assert np.all(deltas <= 5e-7)
+        assert np.all(deltas <= 1e-5)
 
 
 @pytest.mark.parametrize(('n', 'd', 'k', 'seed'),

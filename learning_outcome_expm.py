@@ -133,5 +133,7 @@ class ComputeGlobalModel(
         combined_data, stacked = gen_samples(samp, self.M, self.trial)
 
         if problem == 'lra':
-            X = stacked[0]
+            X = stacked
             Mod = BlockIterSVD(k=self.k, n_parties=self.M)
+        elif problem== 'pcr':
+            X, y = stacked[0], stacked[1]

@@ -1,4 +1,5 @@
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
+from sklearn.linear_model.base import LinearModel
 import numpy as np
 from math import ceil, log, exp
 
@@ -10,6 +11,7 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 # INFO or WARNING
 logger.setLevel(logging.INFO)
+
 
 class BlockIterSVD(BaseEstimator, TransformerMixin):
     def __init__(self, k=10, max_spectral_ratio=0.9, eps=1e-10, nbits=0, \
@@ -39,6 +41,7 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
             with conversion to integers in between rounds
         """
         self.n_iter = int(ceil(log(eps / 2.0) / log(max_spectral_ratio)))
+        logger.info('n_iter={}'.format(self.n_iter))
         self.random_seed = random_seed
         self.k = k
         self.nbits = nbits
@@ -73,3 +76,45 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
     def inverse_transform(self, X):
         # XVV^T is a rank k representation of X
         return np.dot(X, self.V.T)
+
+
+class PrincipalComponentRegression(BlockIterSVD):
+    def fit(self, X, y):
+        self.mu_x_ = np.mean(X, 0)
+        X = X - self.mu_x_
+        self.mu_y_ = np.mean(y)
+        y = y - self.mu_y_
+        W = super(PrincipalComponentRegression, self).fit_transform(X)
+        self.coef_, self._residues, self.rank_, self.singular_ \
+            = np.linalg.lstsq(W, y)
+
+    def transform(self, X, y=None):
+        X = X - np.mean(X, 0)
+        return super(PrincipalComponentRegression, self).transform(X)
+
+    def fit_transform(self, X, y):
+        self.fit(X, y)
+        return self.transform(X)
+
+    def predict(self, X):
+        X = self.transform(X)
+        return np.dot(X, self.coef_) + self.mu_y_
+
+    def rmse(self, Xtest, ytest):
+        ypred = self.predict(Xtest)
+        return np.sqrt(np.mean((ytest - ypred) ** 2))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

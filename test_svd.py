@@ -1,8 +1,12 @@
 from __future__ import print_function
+
 from blockpower_svd import block_power_iteration, \
     private_distributed_block_power_iteration, mat_to_sym, \
     sym_eigen_to_mat_singular
 from sklearn_interface import BlockIterSVD
+from learning_outcome_expm import gen_samples
+
+
 import numpy as np
 from sklearn.utils.extmath import svd_flip
 from math import exp, log, ceil
@@ -12,6 +16,36 @@ import sys
 
 if sys.version_info[0] == 3:
     from functools import reduce
+
+
+def test_gen_samples():
+    np.random.seed(0)
+    X = np.random.rand(10, 3)
+    y = np.random.randint(0, 11, 10)
+    combined_data, stacked = gen_samples([X, y], 3, 0)
+    ind = 0
+
+    for i, comb in enumerate(combined_data):
+        ni = comb[0].shape[0]
+        for j, arr in enumerate(comb):
+
+            assert np.allclose(arr, stacked[j][ind:(ind+ni), :])
+        ind += ni
+
+    combined_data, stacked = gen_samples([X], 3, 0)
+    ind = 0
+
+    for i, comb in enumerate(combined_data):
+
+        if type(comb)==list:
+            ni = comb[0].shape[0]
+            for j, arr in enumerate(comb):
+                assert np.allclose(arr, stacked[j][ind:(ind + ni), :])
+        else:
+            ni = comb.shape[0]
+
+            assert np.allclose(comb, stacked[ind:(ind + ni), :])
+        ind += ni
 
 @pytest.mark.parametrize('M',
                          [1,3,30])

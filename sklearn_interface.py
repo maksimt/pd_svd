@@ -1,5 +1,5 @@
 from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
-from sklearn.linear_model.base import LinearModel
+from sklearn.utils.validation import check_is_fitted, check_X_y, check_array
 import numpy as np
 from math import ceil, log, exp
 
@@ -52,6 +52,8 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         return self
 
     def fit_transform(self, X, y=None):
+        check_array(X, accept_sparse=False)
+
         I = lambda i: np.arange(i, X.shape[0], self.n_parties)
         Xs = [X[I(i), :] for i in range(self.n_parties)]
         Ss = [mat_to_sym(Xi, 'mult') for Xi in Xs]
@@ -62,24 +64,35 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
                            'based on X. Lowering.'.format(self.nbits,
                                                           nbits_max))
         logger.info('Setting nbits to nbits_max={}.'.format(nbits_max))
-        self.nbits = nbits_max
+        self.nbits_ = nbits_max
         rtv = private_distributed_block_power_iteration(Ss, k=self.k,
-                T=self.n_iter, nbits=self.nbits, random_seed=self.random_seed)
+                T=self.n_iter, nbits=self.nbits_, random_seed=self.random_seed)
         V_est, s_est = rtv['V'], rtv['s']
         V_est, s_est = sym_eigen_to_mat_singular(V_est, s_est, 'mult')
-        self.V = V_est
-        return np.dot(X, self.V)
+        self.V_ = V_est
+        return np.dot(X, self.V_)
 
     def transform(self, X, y=None):
-        return np.dot(X, self.V)
+        check_array(X, accept_sparse=False)
+        check_is_fitted(self, ['V_'])
+        return np.dot(X, self.V_)
 
     def inverse_transform(self, X):
-        # XVV^T is a rank k representation of X
-        return np.dot(X, self.V.T)
+        """XVV^T is a rank k representation of X"""
+        check_array(X, accept_sparse=False)
+        check_is_fitted(self, ['V_'])
+        return np.dot(X, self.V_.T)
+
+    def recons_err(self, X):
+        Xh = self.transform(X)
+        Xh = self.inverse_transform(X)
+        return np.linalg.norm(Xh-X,'fro')
 
 
 class PrincipalComponentRegression(BlockIterSVD):
     def fit(self, X, y):
+        check_X_y(X, y, accept_sparse=False)
+
         self.mu_x_ = np.mean(X, 0)
         X = X - self.mu_x_
         self.mu_y_ = np.mean(y)
@@ -89,6 +102,8 @@ class PrincipalComponentRegression(BlockIterSVD):
             = np.linalg.lstsq(W, y)
 
     def transform(self, X, y=None):
+        check_is_fitted(self, ['V', 'mu_x_', 'mu_y_', 'coef_'])
+
         X = X - np.mean(X, 0)
         return super(PrincipalComponentRegression, self).transform(X)
 
@@ -97,13 +112,17 @@ class PrincipalComponentRegression(BlockIterSVD):
         return self.transform(X)
 
     def predict(self, X):
+        check_is_fitted(self, ['V', 'mu_x_', 'mu_y_', 'coef_'])
+
         X = self.transform(X)
         return np.dot(X, self.coef_) + self.mu_y_
 
     def rmse(self, Xtest, ytest):
+        check_is_fitted(self, ['V', 'mu_x_', 'mu_y_', 'coef_'])
+        check_X_y(Xtest, ytest, accept_sparse=False)
+
         ypred = self.predict(Xtest)
         return np.sqrt(np.mean((ytest - ypred) ** 2))
-
 
 
 

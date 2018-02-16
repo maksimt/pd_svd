@@ -1,10 +1,11 @@
 import luigi
 import itertools
 import numpy as np
+import pickle
 from sklearn.utils import resample
 from math import ceil
 
-from sklearn_interface import BlockIterSVD
+from sklearn_interface import BlockIterSVD, PrincipalComponentRegression
 
 from experiment_utils.luigi_interface.MTask import \
     AutoLocalOutputMixin, LoadInputDictMixin
@@ -127,7 +128,7 @@ class ComputeGlobalModel(
             ds = datasets.load_regression_dataset(dn)
             samp = [ds['Xtr'], ds['ytr']]
         elif problem == 'lra':
-            ds = datasets.load_dataset(dn)
+            ds = datasets.load_dataset(dn, train=True)
             samp = [ds['X'].toarray()]
 
         combined_data, stacked = gen_samples(samp, self.M, self.trial)
@@ -135,5 +136,11 @@ class ComputeGlobalModel(
         if problem == 'lra':
             X = stacked
             Mod = BlockIterSVD(k=self.k, n_parties=self.M)
+            Mod = Mod.fit(X)
         elif problem== 'pcr':
             X, y = stacked[0], stacked[1]
+            Mod = PrincipalComponentRegression(k=self.k, n_parties=self.M)
+            Mod = Mod.fit(X, y)
+
+        with self.output.open('w') as f:
+            pickle.dump(Mod, f, 2)

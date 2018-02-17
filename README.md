@@ -1,5 +1,13 @@
 # SVD using block power iterations
 
+### Usage
+Note: this is not going to work until we include local dependencies.
+
+```bash
+git clone https://github.com/maksimt/pd_svd
+luigi --module pd_svd.learning_outcome_expm EvalAll --workers 2 --local-scheduler
+```
+
 ### Simulating fixed precision arithmetic
 
 The purpose of this library is to eventually rely on

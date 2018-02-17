@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 # INFO or WARNING
 logger.setLevel(logging.INFO)
 
+
+_eps_div = np.spacing(10)
+
 def _to_fixed(f, precision=20):
     # f = f * (1 << precision)
     # return f.astype(np.int64)
@@ -55,10 +58,15 @@ def check_overflow(As, nbits=0):
     return int(nbits_max)
 
 def private_distributed_block_power_iteration(As, k, T, nbits=18,
-                                              random_seed=0):
+                                              random_seed=0,
+                                              perform_check_overflow=True):
     shapes = np.array([np.shape(A)[0] for A in As]+[np.shape(A)[1] for A in As])
     assert np.all(np.diff(shapes)==0)  # all As are square of the same shape
-    check_overflow(As, nbits)
+    if perform_check_overflow:
+        nbits = check_overflow(As, nbits)
+    if nbits <= 17:
+        logger.warn('nbits = {} is small, may result in bad learning '
+                    'outcome'.format(nbits))
     n = As[0].shape[0]
     rtv = {}
     if random_seed:
@@ -68,13 +76,14 @@ def private_distributed_block_power_iteration(As, k, T, nbits=18,
     V = N.rvs((n, k))
 
     for t in range(T):
+        logger.debug('On iteration {}'.format(t))
         V0 = V
         V = np.zeros_like(V, dtype=np.double)
         for A in As:
             V += _to_fixed(np.dot(A, V0), nbits)
 
         nv = np.sqrt((V ** 2).sum(0))
-        V = V / nv.astype(np.double)
+        V = V / (nv.astype(np.double)+_eps_div)
         V = _from_fixed(V, nbits)
         V, _ = np.linalg.qr(V)
 
@@ -86,6 +95,7 @@ def private_distributed_block_power_iteration(As, k, T, nbits=18,
 def block_power_iteration(A, k, T, random_seed=0):
     n, m = A.shape
     assert n == m
+    r = min([n,m])
     rtv = {}
     if random_seed:
         np.random.seed(random_seed)
@@ -97,7 +107,7 @@ def block_power_iteration(A, k, T, random_seed=0):
         V = np.dot(A, V)
 
         nv = np.sqrt((V ** 2).sum(0))
-        V = V / nv
+        V = V / (nv+_eps_div)
         V, _ = np.linalg.qr(V)
 
     s = np.sqrt((np.dot(A, V) ** 2).sum(0))

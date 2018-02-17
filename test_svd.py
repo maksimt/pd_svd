@@ -17,6 +17,15 @@ import sys
 if sys.version_info[0] == 3:
     from functools import reduce
 
+def test_low_rank(r=5):
+    np.random.seed(0)
+    X = np.dot(np.random.rand(1000,r), np.random.rand(r,1000))
+    r = np.linalg.matrix_rank(X)
+    k = 50
+    print('r={}'.format(r))
+    assert r < k
+    block_power_iteration(X, k, 100)
+    private_distributed_block_power_iteration([X], k, 100, nbits=20)
 
 def test_gen_samples():
     np.random.seed(0)
@@ -66,6 +75,11 @@ def test_embedding_quality(M, n=60, d=100, seed=0):
     print('recons ={} err={} total={}\n'.format(recons, err, total))
 
     assert np.abs(recons-err) <= tol
+
+    X2 = np.random.randn(int(n/3.0), d)
+    re = BISVD.recons_err(X2)
+    print('recons for X2 = {}'.format(re))
+    assert re < np.linalg.norm(X2, 'fro')
 
 
 @pytest.mark.parametrize(('n', 'd', 'k', 'M', 'nbits', 'seed'),

@@ -29,14 +29,16 @@ logger.setLevel(logging.INFO)
 
 # pick the first n_terms_lra for the LRA problem
 n_terms_lra = 1000
+min_doc_length = 1
 # we do this because the d*d symmetric matrices take too much memory
 # and scipy's sparse matrix algebra support still isn't worth building
 # around.
 
 class EvalAll(luigi.WrapperTask):
     def requires(self):
-        Ks = [7, 14, 21]  # k for k-truncated SVD
+        Ks = [7, 14, 21, 42]  # k for k-truncated SVD
         Ms = [3, 9, 27, 81]  # number of parties, each samples 1/M of the data
+        Nbits = [10, 20, 60]
         problem_settings = [
             {
                 'problem': 'pcr',  # principal component regression
@@ -45,16 +47,24 @@ class EvalAll(luigi.WrapperTask):
             {
                 'problem': 'lra',  # low rank approximation
                 'dataset_name': 'Enron'
+            },
+            {
+                'problem': 'pcr',  # principal component regression
+                'dataset_name': 'OnlineNewsPopularity'
+            },
+            {
+                'problem': 'lra',  # low rank approximation
+                'dataset_name': '20NG'
             }
         ]
         trials = range(5)  # random seed for each party's local data sample
         reqs = []
-        for k, M, problem_setting, trial in itertools.product(Ks, Ms,
-                                                              problem_settings,
-                                                              trials):
+        for k, M, nbits, problem_setting, trial in itertools.product(Ks, Ms,
+                                            Nbits, problem_settings, trials):
             reqs.append(EvalLocalVsGlobal(
                 k=k,
                 M=M,
+                nbits=nbits,
                 problem_setting=problem_setting,
                 trial=trial
             ))
@@ -66,6 +76,7 @@ class EvalLocalVsGlobal(AutoLocalOutputMixin(base_path=base_path + 'eval/'),
                         luigi.Task):
     k = luigi.IntParameter()
     M = luigi.IntParameter()
+    nbits = luigi.IntParameter()
     problem_setting = luigi.DictParameter()
     trial = luigi.IntParameter()
 
@@ -73,6 +84,7 @@ class EvalLocalVsGlobal(AutoLocalOutputMixin(base_path=base_path + 'eval/'),
         req = {
             'global': ComputeGlobalModel(k=self.k,
                                          M=self.M,
+                                         nbits=self.nbits,
                                          problem_setting=self.problem_setting,
                                          trial=self.trial
                                          )
@@ -93,16 +105,10 @@ class EvalLocalVsGlobal(AutoLocalOutputMixin(base_path=base_path + 'eval/'),
             Xte, yte = ds['Xte'], ds['yte']
         elif problem == 'lra':
             # get the same top-n words as we did for training the global model
-            ds = datasets.load_dataset(dn, train=True)
-            X = ds['X'].toarray()
-            _, tfidf = transform.tfidf(X, return_idf=True)
-            J = np.argsort(tfidf)[::-1][0:n_terms_lra]
-            del X
-            ds = datasets.load_dataset(dn, train=False, load_meta=True)
-            words_is = [ds['meta']['train']['dict'][j] for j in J]
-            words_oos = ds['meta']['test']['dict']
-            Xte = ds['X'].toarray()
-            Xte = change_of_dictionary(Xte, words_is, words_oos)
+            ds = datasets.load_dataset('Enron', train=False,
+                                       min_words_per_doc=min_doc_length,
+                                       dict_size=n_terms_lra)
+            Xte = ds['X']
 
         # get each party's local data
         each_party_data, _ = load_data(problem, dn, self.M, self.trial)
@@ -119,7 +125,7 @@ class EvalLocalVsGlobal(AutoLocalOutputMixin(base_path=base_path + 'eval/'),
         base_eval = {
             'k': self.k, 'M': self.M, 'party_pct': 1.0 / self.M,
             'global_score':gs, 'trial': self.trial, 'problem': problem,
-            'dataset_name': dn
+            'dataset_name': dn, 'bits_precision': self.nbits
         }
         evals = []
         for m in range(self.M):
@@ -175,12 +181,10 @@ def load_data(problem, dn, M, trial):
         ds = datasets.load_regression_dataset(dn)
         samp = [ds['Xtr'], ds['ytr']]
     elif problem == 'lra':
-        ds = datasets.load_dataset(dn, train=True)
-        X = ds['X'].toarray()
-        _, tfidf = transform.tfidf(X, return_idf=True)
-        J = np.argsort(tfidf)[::-1][0:n_terms_lra]
-        X = X[:, J]
-        samp = [X]
+        ds = datasets.load_dataset(dn,
+                                   min_words_per_doc=min_doc_length,
+                                   dict_size=n_terms_lra)
+        samp = [ds['X'].toarray()]
 
     each_party_data, stacked = gen_samples(samp, M, trial)
     return each_party_data, stacked
@@ -192,6 +196,7 @@ class ComputeGlobalModel(
     luigi.Task):
     k = luigi.IntParameter()
     M = luigi.IntParameter()
+    nbits = luigi.IntParameter()
     problem_setting = luigi.DictParameter()
     trial = luigi.IntParameter()
 
@@ -204,11 +209,12 @@ class ComputeGlobalModel(
         logger.info('Fitting global model')
         if problem == 'lra':
             X = stacked
-            Mod = BlockIterSVD(k=self.k, n_parties=self.M)
+            Mod = BlockIterSVD(k=self.k, n_parties=self.M, nbits=self.nbits)
             Mod = Mod.fit(X)
         elif problem == 'pcr':
             X, y = stacked[0], stacked[1]
-            Mod = PrincipalComponentRegression(k=self.k, n_parties=self.M)
+            Mod = PrincipalComponentRegression(k=self.k, n_parties=self.M,
+                                               nbits=self.nbits)
             Mod = Mod.fit(X, y)
 
         with self.output().open('w') as f:

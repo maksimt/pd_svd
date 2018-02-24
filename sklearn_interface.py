@@ -4,7 +4,8 @@ import numpy as np
 from math import ceil, log, exp
 
 from blockpower_svd import private_distributed_block_power_iteration, \
-    check_overflow, mat_to_sym, sym_eigen_to_mat_singular, block_power_iteration
+    check_overflow, mat_to_sym, sym_eigen_to_mat_singular, \
+    block_power_iteration, private_top_k_eigenvectors
 
 import logging
 logging.basicConfig(level=logging.WARNING)
@@ -15,7 +16,7 @@ logger.setLevel(logging.INFO)
 
 class BlockIterSVD(BaseEstimator, TransformerMixin):
     def __init__(self, k=10, max_spectral_ratio=0.9, eps=1e-10, nbits=20, \
-                 n_parties=1, random_seed=0):
+                 n_parties=1, random_seed=0, eps_diff_priv=None):
         """
 
         Parameters
@@ -39,6 +40,8 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         n_parites : positive integer, optional
             Used to simulate the SVD being computed among multiple parties
             with conversion to integers in between rounds
+        eps_dif_priv : positive float or None, optional
+            The epsilon to use for differentially private SVD
         """
         self.n_iter = int(ceil(log(eps / 2.0) / log(max_spectral_ratio)))
         logger.info('n_iter={}'.format(self.n_iter))
@@ -46,6 +49,7 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         self.k = k
         self.nbits = nbits
         self.n_parties = n_parties
+        self.eps_diff_priv=None
 
     def fit(self, X, y=None):
         self.fit_transform(X)
@@ -70,15 +74,24 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         logger.info('Setting nbits to nbits_max={}.'.format(nbits_max))
         self.nbits_ = nbits_max
 
-        if self.n_parties>1:
-            logger.info('Using private block power iteration')
-            rtv = private_distributed_block_power_iteration(Ss, k=self.k,
-                T=self.n_iter, nbits=self.nbits_,
-                random_seed=self.random_seed, perform_check_overflow=False)
-        elif self.n_parties==1:
-            logger.info('n_parties==1, using centralized block power iteration')
-            rtv = block_power_iteration(Ss[0], k=self.k, T=self.n_iter,
-                                        random_seed=self.random_seed)
+        if self.eps_diff_priv is None:
+            if self.n_parties>1:
+                logger.info('Using private block power iteration')
+                rtv = private_distributed_block_power_iteration(Ss, k=self.k,
+                    T=self.n_iter, nbits=self.nbits_,
+                    random_seed=self.random_seed, perform_check_overflow=False)
+            elif self.n_parties==1:
+                logger.info('n_parties==1, using centralized block power iteration')
+                rtv = block_power_iteration(Ss[0], k=self.k, T=self.n_iter,
+                                            random_seed=self.random_seed)
+        else:
+            # pick generous parameters for delta and coherence
+            delta = 0.1
+            coh_ub = 1.0
+            e_dp = float(self.eps_diff_priv)
+            logger.info('eps={:.1e} using private low rank'.format(e_dp))
+            rtv = private_top_k_eigenvectors(Ss[0],k=self.k, T=self.n_iter,
+             random_seed=self.random_seed, eps=e_dp, delta=delta, coh_ub=coh_ub)
         V_est, s_est = rtv['V'], rtv['s']
         V_est, s_est = sym_eigen_to_mat_singular(V_est, s_est, 'mult')
         self.V_ = V_est

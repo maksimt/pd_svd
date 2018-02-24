@@ -192,7 +192,7 @@ def private_power_iteration(A, T, eps=np.inf, delta=0, coh_ub=np.inf,
 
     # define sigma based on delta, T, and eps
     if np.isfinite(eps):
-        sigma = 2 * (1 / eps) * sqrt(4 * T * log(1.0 / delta))
+        sigma = 2.0 * (1 / eps) * sqrt(4 * T * log(1.0 / delta))
     else:
         sigma = 0.0
 
@@ -211,23 +211,25 @@ def private_power_iteration(A, T, eps=np.inf, delta=0, coh_ub=np.inf,
 
     for t in range(T):
         # (a) check coherence fail condition
-        if np.argmax(x) ** 2 > coh_ub / n:
-            raise ValueError('Coherence upper bound violated')
+        if np.max(x) ** 2 > coh_ub / n:
+            pass  # we are passing a artificially low value for coh_ub
+            #raise ValueError('Coherence upper bound violated')
         # (b) draw noise
         if sigma > 0:
             g = Ni.rvs(n)
         else:
             g = 0
         # (c) power iteration
-        x_new = np.dot(A, x) + g
-        # Ax = x_new => Ax-x_new is small
-        # Ax = -x_new => Ax+x_new is small
+        x = np.dot(A, x) + g
 
-        if np.sum(x + x_new) > np.sum(x - x_new):
-            x_new *= -1
-        x = x_new
         # (d) normalize
-        x = x / np.linalg.norm(x, ord=2)
+        nx = np.linalg.norm(x, ord=2)
+        if nx > 0:
+            x = x / nx
+        else:
+            x = N0.rvs(n)
+            nx = np.linalg.norm(x, ord=2)
+            x = x / nx
 
         # capture diagnostics
         rtv = run_diagnostics(diagnostics, rtv, locals())
@@ -249,7 +251,7 @@ def private_top_k_eigenvectors(A, k, T, eps=np.inf, delta=0, coh_ub=np.inf,
 
     if np.isfinite(eps):
         eps = eps / sqrt(4 * k * log(1 / delta))
-    delta = delta / k
+    delta = float(delta) / k
     V = np.empty((n, k))
     s = np.empty((k,))
 

@@ -39,6 +39,7 @@ class EvalAll(luigi.WrapperTask):
         Ks = [7, 14, 21, 42]  # k for k-truncated SVD
         Ms = [3, 9, 27, 81]  # number of parties, each samples 1/M of the data
         Nbits = [10, 20, 60]
+        Epsilons_DP = [10.0, 100.0, 1000.0]
         problem_settings = [
             {
                 'problem': 'pcr',  # principal component regression
@@ -57,7 +58,7 @@ class EvalAll(luigi.WrapperTask):
                 'dataset_name': '20NG'
             }
         ]
-        trials = range(5)  # random seed for each party's local data sample
+        trials = range(10)  # random seed for each party's local data sample
         reqs = []
         for k, M, nbits, problem_setting, trial in itertools.product(Ks, Ms,
                                             Nbits, problem_settings, trials):
@@ -65,6 +66,16 @@ class EvalAll(luigi.WrapperTask):
                 k=k,
                 M=M,
                 nbits=nbits,
+                problem_setting=problem_setting,
+                trial=trial
+            ))
+        for k, M, eps_dp, problem_setting, trial in itertools.product(Ks, Ms,
+                                 Epsilons_DP,  problem_settings, trials):
+            problem_setting['eps'] = eps_dp
+            reqs.append(EvalLocalVsGlobal(
+                k=k,
+                M=M,
+                nbits=-1,
                 problem_setting=problem_setting,
                 trial=trial
             ))
@@ -206,16 +217,31 @@ class ComputeGlobalModel(
 
         _, stacked = load_data(problem, dn, self.M, self.trial)
 
-        logger.info('Fitting global model')
-        if problem == 'lra':
-            X = stacked
-            Mod = BlockIterSVD(k=self.k, n_parties=self.M, nbits=self.nbits)
-            Mod = Mod.fit(X)
-        elif problem == 'pcr':
-            X, y = stacked[0], stacked[1]
-            Mod = PrincipalComponentRegression(k=self.k, n_parties=self.M,
-                                               nbits=self.nbits)
-            Mod = Mod.fit(X, y)
+
+        # normal experiments with no eps but with nbits
+        if 'eps' not in self.problem_setting:
+            logger.info('Fitting global model using PD-SVD')
+            if problem == 'lra':
+                X = stacked
+                Mod = BlockIterSVD(k=self.k, n_parties=self.M, nbits=self.nbits)
+                Mod = Mod.fit(X)
+            elif problem == 'pcr':
+                X, y = stacked[0], stacked[1]
+                Mod = PrincipalComponentRegression(k=self.k, n_parties=self.M,
+                                                   nbits=self.nbits)
+                Mod = Mod.fit(X, y)
+        else:
+        # experiments with eps
+            logger.info('Fitting global model using Diff Priv SVD')
+            eps = self.problem_setting['eps']
+            if problem == 'lra':
+                X = stacked
+                Mod = BlockIterSVD(k=self.k, eps_diff_priv=eps)
+                Mod = Mod.fit(X)
+            elif problem == 'pcr':
+                X, y = stacked[0], stacked[1]
+                Mod = PrincipalComponentRegression(k=self.k, eps_diff_priv=eps)
+                Mod = Mod.fit(X, y)
 
         with self.output().open('w') as f:
             pickle.dump(Mod, f, 2)

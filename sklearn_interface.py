@@ -49,7 +49,7 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         self.k = k
         self.nbits = nbits
         self.n_parties = n_parties
-        self.eps_diff_priv=None
+        self.eps_diff_priv=eps_diff_priv
 
     def fit(self, X, y=None):
         self.fit_transform(X)
@@ -86,8 +86,8 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
                                             random_seed=self.random_seed)
         else:
             # pick generous parameters for delta and coherence
-            delta = 0.1
-            coh_ub = 1.0
+            delta = 0.01
+            coh_ub = float(Ss[0].shape[0])
             e_dp = float(self.eps_diff_priv)
             logger.info('eps={:.1e} using private low rank'.format(e_dp))
             rtv = private_top_k_eigenvectors(Ss[0],k=self.k, T=self.n_iter,
@@ -95,6 +95,7 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         V_est, s_est = rtv['V'], rtv['s']
         V_est, s_est = sym_eigen_to_mat_singular(V_est, s_est, 'mult')
         self.V_ = V_est
+        self.s_ = s_est
         return np.dot(X, self.V_)
 
     def transform(self, X, y=None):

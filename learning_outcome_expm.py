@@ -36,10 +36,10 @@ min_doc_length = 1
 
 class EvalAll(luigi.WrapperTask):
     def requires(self):
-        Ks = [7, 14, 21, 42]  # k for k-truncated SVD
+        Ks = [21]#[7, 14, 21, 42]  # k for k-truncated SVD
         Ms = [3, 9, 27, 81]  # number of parties, each samples 1/M of the data
         Nbits = [10, 20, 60]
-        Epsilons_DP = [10.0, 100.0, 1000.0]
+        Epsilons_DP = [0.1, 10.0]#, 1.0]
         problem_settings = [
             {
                 'problem': 'pcr',  # principal component regression
@@ -58,7 +58,7 @@ class EvalAll(luigi.WrapperTask):
                 'dataset_name': '20NG'
             }
         ]
-        trials = range(10)  # random seed for each party's local data sample
+        trials = range(5)  # random seed for each party's local data sample
         reqs = []
         for k, M, nbits, problem_setting, trial in itertools.product(Ks, Ms,
                                             Nbits, problem_settings, trials):
@@ -135,9 +135,10 @@ class EvalLocalVsGlobal(AutoLocalOutputMixin(base_path=base_path + 'eval/'),
 
         base_eval = {
             'k': self.k, 'M': self.M, 'party_pct': 1.0 / self.M,
-            'global_score':gs, 'trial': self.trial, 'problem': problem,
-            'dataset_name': dn, 'bits_precision': self.nbits
+            'global_score':gs, 'trial': self.trial, 'bits_precision': self.nbits
         }
+        base_eval.update(self.problem_setting)
+
         evals = []
         for m in range(self.M):
             logger.info('Evaluating model {} for {} {}'.format(m, problem, dn))

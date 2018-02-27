@@ -208,7 +208,9 @@ def private_power_iteration(A, T, eps=np.inf, delta=0, coh_ub=np.inf,
     x = N0.rvs(n)
     # noise added in each iteration
     Ni = stats.norm(0, (coh_ub * sigma ** 2) / n)
-
+    logger.info('eps={} delta={} coh={} n={}; Ni std = {}'.format(eps, delta,
+                                                                  coh_ub, n,
+                                                                  Ni.std()))
     for t in range(T):
         # (a) check coherence fail condition
         if np.max(x) ** 2 > coh_ub / n:

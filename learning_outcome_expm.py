@@ -39,7 +39,7 @@ class EvalAll(luigi.WrapperTask):
         Ks = [21]#[7, 14, 21, 42]  # k for k-truncated SVD
         Ms = [3, 9, 27, 81]  # number of parties, each samples 1/M of the data
         Nbits = [10, 20, 60]
-        Epsilons_DP = [0.1, 10.0]#, 1.0]
+        Epsilons_DP = [0.1, 10.0, 1000.0]#, 1.0]
         problem_settings = [
             {
                 'problem': 'pcr',  # principal component regression

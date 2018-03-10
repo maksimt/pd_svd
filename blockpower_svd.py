@@ -207,7 +207,11 @@ def private_power_iteration(A, T, eps=np.inf, delta=0, coh_ub=np.inf,
     N0 = stats.norm(0, 1.0 / n)
     x = N0.rvs(n)
     # noise added in each iteration
-    Ni = stats.norm(0, (coh_ub * sigma ** 2) / n)
+    sigma_iter = (coh_ub * sigma ** 2) / n
+    Ni = stats.norm(0, sigma_iter)
+    assert sigma_iter > 0 or eps==np.inf, 'eps is {} but sigma_iter = {} ' \
+                                          '!>0'.format(eps, sigma_iter)
+
     logger.info('eps={} delta={} coh={} n={}; Ni std = {}'.format(eps, delta,
                                                                   coh_ub, n,
                                                                   Ni.std()))
@@ -217,15 +221,20 @@ def private_power_iteration(A, T, eps=np.inf, delta=0, coh_ub=np.inf,
             pass  # we are passing a artificially low value for coh_ub
             #raise ValueError('Coherence upper bound violated')
         # (b) draw noise
+
         if sigma > 0:
             g = Ni.rvs(n)
+            ng = np.linalg.norm(g, 2)
+            assert ng > 0
         else:
             g = 0
+
         # (c) power iteration
         x = np.dot(A, x) + g
 
         # (d) normalize
         nx = np.linalg.norm(x, ord=2)
+        assert nx>0, 'nx<=0'
         if nx > 0:
             x = x / nx
         else:
@@ -257,11 +266,11 @@ def private_top_k_eigenvectors(A, k, T, eps=np.inf, delta=0, coh_ub=np.inf,
     V = np.empty((n, k))
     s = np.empty((k,))
 
-    L = stats.laplace(0, 1 / eps)
+    L = stats.laplace(0, 1.0 / eps)
 
     for i in range(k):
         V[:, i] = private_power_iteration(A, T, eps=eps, delta=delta,
-                                          coh_ub=coh_ub, random_seed=None)['x']
+                          coh_ub=coh_ub, random_seed=random_seed)['x']
 
         s[i] = np.linalg.norm(np.dot(A, V[:, i]), 2)
         if np.isfinite(eps):

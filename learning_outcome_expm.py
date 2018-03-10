@@ -38,8 +38,9 @@ class EvalAll(luigi.WrapperTask):
     def requires(self):
         Ks = [21]#[7, 14, 21, 42]  # k for k-truncated SVD
         Ms = [3, 9, 27, 81]  # number of parties, each samples 1/M of the data
-        Nbits = [10, 20, 60]
-        Epsilons_DP = [0.1, 10.0, 1000.0]#, 1.0]
+        #Nbits = [10, 20, 31, 60]
+        Nbits = [60]
+        Epsilons_DP = [0.1]#, 1.0]
         problem_settings = [
             {
                 'problem': 'pcr',  # principal component regression
@@ -58,7 +59,7 @@ class EvalAll(luigi.WrapperTask):
                 'dataset_name': '20NG'
             }
         ]
-        trials = range(5)  # random seed for each party's local data sample
+        trials = range(30)  # random seed for each party's local data sample
         reqs = []
         for k, M, nbits, problem_setting, trial in itertools.product(Ks, Ms,
                                             Nbits, problem_settings, trials):

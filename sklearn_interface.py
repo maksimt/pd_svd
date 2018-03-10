@@ -86,7 +86,7 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
                                             random_seed=self.random_seed)
         else:
             # pick generous parameters for delta and coherence
-            delta = 0.01
+            delta = 1e-5
             coh_ub = float(Ss[0].shape[0])
             e_dp = float(self.eps_diff_priv)
             logger.info('eps={:.1e} using private low rank'.format(e_dp))

@@ -63,8 +63,7 @@ class BlockIterSVD(BaseEstimator, TransformerMixin):
         assert self.k <= r, 'asking for k ={} > min(m,n)={}'.format(self.k, r)
 
         I = lambda i: np.arange(i, X.shape[0], self.n_parties)
-        Xs = [X[I(i), :] for i in range(self.n_parties)]
-        Ss = [mat_to_sym(Xi, 'mult') for Xi in Xs]
+        Ss = [mat_to_sym(X[I(i), :], 'mult') for i in range(self.n_parties)]
         logger.info('len(Ss)={}'.format(len(Ss)))
 
         if self.nbits == 0:

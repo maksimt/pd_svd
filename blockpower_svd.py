@@ -76,7 +76,7 @@ def private_distributed_block_power_iteration(As, k, T, nbits=18,
     V = N.rvs((n, k))
 
     for t in range(T):
-        logger.debug('On iteration {}'.format(t))
+        logger.info('On iteration {}/{}'.format(t, T))
         V0 = V
         V = np.zeros_like(V, dtype=np.double)
         for A in As:
